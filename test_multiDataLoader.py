@@ -32,37 +32,17 @@ def main():
         target_vals = convert_str_to_num(args.nyu_val_samples, 'int')
         val_datasets = [NYU_Dataset(args, 'test', num_sample_test=v) for v in target_vals]
         print('Dataset is NYU')
-        num_sparse_dep = args.num_sample        
-    elif args.data_name == 'KITTIDC':
-        from data.kittidc import KITTIDC as KITTI_dataset
-        args.patch_height, args.patch_width = 240, 1216
-        args.max_depth = 80.0
-        args.split_json = './data/data_split/kitti_dc.json'
-        target_vals = convert_str_to_num(args.kitti_val_lidars, 'int')
-        val_datasets = [KITTI_dataset(args, 'test', num_lidars_test=v) for v in target_vals]
-        print('Dataset is KITTI')
-        num_sparse_dep = args.lidar_lines
-    elif args.data_name == 'VOID':
-        from data.void import VOID
-        args.nyu_val_samples = str(args.void_sparsity)
-        target_vals = convert_str_to_num(args.nyu_val_samples, 'int')
-        dataset = VOID(args, 'test')
+        num_sparse_dep = args.num_sample    
+    elif args.data_name == 'FLSea':
+        from data.flsea import FLSea as FLSea_dataset
+        args.max_depth = 10.0
+        args.val_path_txt = './data/flsea_preserved_testing.txt'
+        dataset = FLSea_dataset(args, 'test' )
         val_datasets = [dataset]
-        num_sparse_dep = args.num_sample
-    elif args.data_name == 'SUNRGBD':
-        from data.sun_rgbd import SUN_RGBD
-        args.split_json = './data/data_split/allsplit.mat'
-        args.max_depth = 10.0
-        target_vals = convert_str_to_num(args.nyu_val_samples, 'int')
-        val_datasets = [SUN_RGBD(args, 'test', num_sample_test=v) for v in target_vals]
-        num_sparse_dep = args.num_sample
-    elif args.data_name == 'IPAD':
-        from data.ipad import iPad as IPAD_dataset
-        args.max_depth = 10.0
-        target_vals = convert_str_to_num(args.nyu_val_samples, 'int')
-        val_datasets = [IPAD_dataset(args, 'test', num_sample_test=v) for v in target_vals]
-        print('[IPAD Dataset] Split: {} | MaxDepth: {} | H,W: {},{} | Num Sample: {}'.format(args.split_json, args.max_depth, args.patch_height, args.patch_width, args.num_sample))
-        num_sparse_dep = args.num_sample
+        target_vals = [400] # how many sparse depth points used
+        print('Dataset is FLSea')
+        num_sparse_dep = args.num_sample  # this parameter is not used at all
+    
     elif args.data_name == 'NUSCENE':
         from data.nuscene import NUSCENE
         args.max_depth = 80.0
@@ -118,6 +98,11 @@ def main():
 
     avg_rmse = AverageMeter('avg_rmse', ':6.4f')
     avg_mae = AverageMeter('avg_mae', ':6.4f')
+    avg_irmse = AverageMeter('avg_irmse', ':6.4f')
+    avg_imae = AverageMeter('avg_imae', ':6.4f')
+    avg_AbsRel = AverageMeter('avg_AbsRel', ':6.4f')
+    avg_iAbsRel = AverageMeter('avg_iAbsRel', ':6.4f')
+    avg_silog = AverageMeter('avg_silog', ':6.4f')
     
     print('\n\n=== Arguments ===')
     cnt = 0
@@ -129,17 +114,57 @@ def main():
     print('\n')
     
     for target_val, val_loader in zip(target_vals, test_loaders):
-        val_rmse, val_mae = test(val_loader, model, args, visual, target_val)
+        val_rmse, val_mae, val_i_rmse, val_i_mae, val_i_absrel, val_absrel, val_silog = test(val_loader, model, args, visual, target_val)
         avg_rmse.update(val_rmse)
         avg_mae.update(val_mae)
+        avg_irmse.update(val_i_rmse)
+        avg_imae.update(val_i_mae)
+        avg_iAbsRel.update(val_i_absrel)
+        avg_AbsRel.update(val_absrel)
+        avg_silog.update(val_silog)
+
     print("Test for various Sampels/Lidars:",target_vals)
-    for rmse_,mae_ in zip(avg_rmse.list,avg_mae.list):
-        print('{:.4f}/{:.4f}'.format(rmse_,mae_),end=" ")
-    print("\n [Average RMSE/MAE] ==> {:2.4f}/{:2.4f}\n".format(avg_rmse.avg,avg_mae.avg))
+    for rmse_, mae_, irmse_, imae_, iAbsRel_, AbsRel_, silog_ in zip(
+        avg_rmse.list,
+        avg_mae.list,
+        avg_irmse.list,
+        avg_imae.list,
+        avg_iAbsRel.list,
+        avg_AbsRel.list,
+        avg_silog.list,
+    ):
+        print(
+            '{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}'.format(
+                rmse_, mae_,
+                irmse_, imae_,
+                iAbsRel_, AbsRel_,
+                silog_
+            ),
+            end=" "
+        )
+    print(
+        "\n [Average RMSE/MAE/iRMSE/iMAE/iAbsRel/AbsRel/SILog] ==> "
+        "{:2.4f}/{:2.4f}/{:2.4f}/{:2.4f}/{:2.4f}/{:2.4f}/{:2.4f}\n".format(
+            avg_rmse.avg,
+            avg_mae.avg,
+            avg_irmse.avg,
+            avg_imae.avg,
+            avg_iAbsRel.avg,
+            avg_AbsRel.avg,
+            avg_silog.avg
+        )
+    )
     
 def test(test_loader, model, args, visual, target_sample):
     rmse = AverageMeter('RMSE', ':.4f')
     mae = AverageMeter('MAE', ':.4f')
+    i_rmse = AverageMeter('iRMSE', ':.4f')
+    i_mae = AverageMeter('iMAE', ':.4f')
+    iAbsRel = AverageMeter('iAbsRel', ':.4f')
+    AbsRel = AverageMeter('AbsRel', ':.4f')
+    SILog = AverageMeter('SILog', ':.4f')
+
+
     model.eval()
     pbar = tqdm(total=len(test_loader))
 
@@ -149,11 +174,17 @@ def test(test_loader, model, args, visual, target_sample):
             output = model(sample)
 
             if target_sample==0: 
-                rmse_result, mae_result, abs_rel_result = eval_metric2(sample, output['pred_init'], args)
-            else: rmse_result, mae_result, abs_rel_result = eval_metric2(sample, output['pred'], args)
+                rmse_result, mae_result, i_rmse_result, i_mae_result, i_absrel_result, absrel_result, silog_result, d1__result = eval_metric2(sample, output['pred_init'], args)
+            else: rmse_result, mae_result, i_rmse_result, i_mae_result, i_absrel_result, absrel_result, silog_result, d1__result = eval_metric2(sample, output['pred'], args)
+            
 
             rmse.update(rmse_result, sample['gt'].size(0))
             mae.update(mae_result, sample['gt'].size(0))
+            i_rmse.update(i_rmse_result, sample['gt'].size(0))
+            i_mae.update(i_mae_result, sample['gt'].size(0))
+            iAbsRel.update(i_absrel_result, sample['gt'].size(0))
+            AbsRel.update(absrel_result, sample['gt'].size(0))
+            SILog.update(silog_result, sample['gt'].size(0))
 
             if args.visualization:
                 visual.data_put(sample, output)
@@ -176,15 +207,30 @@ def test(test_loader, model, args, visual, target_sample):
             pbar.update(test_loader.batch_size)
 
         if args.use_raw_depth_as_input:
-            error_str_new = '[{}] #:{} | RMSE/MAE: {:.4f}/{:.4f}'.format('Test', 'raw', rmse.avg, mae.avg)
+            error_str_new = '[{}] #:{} | RMSE/MAE/iRMSE/iMAE/iAbsRel/AbsRel/SILog: ' \
+                            '{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}'.format(
+                                'Test', 'raw',
+                                rmse.avg, mae.avg,
+                                i_rmse.avg, i_mae.avg,
+                                iAbsRel.avg, AbsRel.avg,
+                                SILog.avg
+                            )
         else:
-            error_str_new = '[{}] #:{:3d} | RMSE/MAE: {:.4f}/{:.4f}'.format('Test', int(target_sample), rmse.avg, mae.avg)
+            error_str_new = '[{}] #:{:3d} | RMSE/MAE/iRMSE/iMAE/iAbsRel/AbsRel/SILog: ' \
+                            '{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}/{:.4f}'.format(
+                                'Test', int(target_sample),
+                                rmse.avg, mae.avg,
+                                i_rmse.avg, i_mae.avg,
+                                iAbsRel.avg, AbsRel.avg,
+                                SILog.avg
+                            )
+
             
 
         pbar.set_description(error_str_new)
         pbar.close()
 
-    return rmse.avg, mae.avg
+    return rmse.avg, mae.avg,i_rmse.avg,i_mae.avg,iAbsRel.avg,AbsRel.avg,SILog.avg
 
 if __name__ == '__main__':
     main()

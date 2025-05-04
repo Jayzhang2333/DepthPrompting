@@ -1,0 +1,1 @@
+/media/jay/Lexar/FLSea_latest/archive/canyons/u_canyon/u_canyon/imgs/16233043764692187.tiff /media/jay/Lexar/FLSea_latest/archive/canyons/u_canyon/u_canyon/depth/16233043764692187_SeaErra_abs_depth.tif /media/jay/Lexar/FLSea_latest/archive/canyons/u_canyon/u_canyon/imgs/matched_features/16233043764692187_features.csv

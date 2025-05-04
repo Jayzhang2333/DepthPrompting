@@ -11,7 +11,7 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 parser = argparse.ArgumentParser(description='Training')
-parser.add_argument('--data_name', type=str, choices=('NYU', 'KITTIDC', 'IPAD', 'NUSCENE', 'VOID', 'SUNRGBD'), help='dataset name')
+parser.add_argument('--data_name', type=str, choices=('NYU', 'KITTIDC', 'IPAD', 'NUSCENE', 'VOID', 'SUNRGBD', 'FLSea', 'TartanAir'), help='dataset name')
 parser.add_argument('--dir_data', default='YOUR_DATA_FOLDER', help='path to dataset')
 parser.add_argument('--save_dir', help='path to dataset')
 parser.add_argument('--split_json', help='path to json file')

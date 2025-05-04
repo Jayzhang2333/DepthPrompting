@@ -187,36 +187,102 @@ def resize(input,
                         f'out size {(output_h, output_w)} is `nx+1`')
     return F.interpolate(input, size, scale_factor, mode, align_corners)
 
+# def eval_metric2(sample, output, args, rescale=None):
+#     args.min_depth = 1e-3
+#     with torch.no_grad():
+#         pred = output.detach()
+#         gt = sample['gt'].detach()
+
+#         mask = eval_mask(gt,args, garg_crop=args.garg_crop, eigen_crop=args.eigen_crop)
+#         num_valid = mask.sum()
+
+#         pred = pred[mask]
+#         gt = gt[mask]
+
+#         diff = pred - gt
+#         diff_sqr = torch.pow(diff, 2)
+
+#         diff_abs = torch.abs(diff)
+#         rel = diff_abs / (gt)
+#         rel = rel.sum() / (num_valid)
+
+#         rmse = diff_sqr.sum() / (num_valid)
+#         rmse = torch.sqrt(rmse)
+        
+#         diff_abs = torch.abs(diff)
+#         mae = diff_abs.sum() / (num_valid + 1e-8)
+
+#         y_over_z = torch.div(gt, pred)
+#         z_over_y = torch.div(pred, gt)
+#         max_ratio = max_of_two(y_over_z, z_over_y)
+#         delta_125_1 = torch.sum(max_ratio < 1.25)/(num_valid + 1e-8)
+#     return rmse, mae, delta_125_1
+
+import torch
+
 def eval_metric2(sample, output, args, rescale=None):
-    args.min_depth = 1e-3
+    """
+    Compute:
+      – RMSE
+      – MAE
+      – iRMSE
+      – iMAE
+      – iAbsRel
+      – AbsRel
+      – SILog
+      – δ<1 (percentage of pixels with max(gt/pred, pred/gt) < 1.25)
+    """
+    eps = 1e-8
+    args.min_depth = 0.1
+
     with torch.no_grad():
         pred = output.detach()
-        gt = sample['gt'].detach()
+        gt   = sample['gt'].detach()
 
-        mask = eval_mask(gt,args, garg_crop=args.garg_crop, eigen_crop=args.eigen_crop)
-        num_valid = mask.sum()
-
+        # 1) mask out invalid pixels
+        mask = eval_mask(gt, args,
+                         garg_crop=args.garg_crop,
+                         eigen_crop=args.eigen_crop)
         pred = pred[mask]
-        gt = gt[mask]
+        gt   = gt[mask]
 
-        diff = pred - gt
-        diff_sqr = torch.pow(diff, 2)
+        # 2) basic differences
+        diff       = pred - gt
+        diff_abs   = diff.abs()
+        diff_sqr   = diff.pow(2)
 
-        diff_abs = torch.abs(diff)
-        rel = diff_abs / (gt)
-        rel = rel.sum() / (num_valid)
+        # 3) RMSE & MAE
+        rmse = torch.sqrt(diff_sqr.mean())
+        mae  = diff_abs.mean()
 
-        rmse = diff_sqr.sum() / (num_valid)
-        rmse = torch.sqrt(rmse)
-        
-        diff_abs = torch.abs(diff)
-        mae = diff_abs.sum() / (num_valid + 1e-8)
+        # 4) AbsRel (regular depth)
+        absrel = (diff_abs / (gt + eps)).mean()
 
-        y_over_z = torch.div(gt, pred)
-        z_over_y = torch.div(pred, gt)
-        max_ratio = max_of_two(y_over_z, z_over_y)
-        delta_125_1 = torch.sum(max_ratio < 1.25)/(num_valid + 1e-8)
-    return rmse, mae, delta_125_1
+        # 5) SILog
+        log_pred = torch.log(pred + eps)
+        log_gt   = torch.log(gt   + eps)
+        alpha    = (log_gt - log_pred).mean()
+        silog    = torch.sqrt(((log_pred - log_gt + alpha).pow(2)).mean())
+
+        # 6) inverse‐depth metrics
+        pred_inv = 1.0 / (pred + eps)
+        gt_inv   = 1.0 / (gt   + eps)
+        diff_inv     = pred_inv - gt_inv
+        diff_inv_abs = diff_inv.abs()
+        diff_inv_sqr = diff_inv.pow(2)
+
+        irmse   = torch.sqrt(diff_inv_sqr.mean())
+        imae    = diff_inv_abs.mean()
+        iabsrel = (diff_inv_abs / (gt_inv + eps)).mean()
+
+        # 7) δ<1.25 (original depth)
+        y_over_z   = gt   / (pred + eps)
+        z_over_y   = pred / (gt   + eps)
+        max_ratio  = torch.max(y_over_z, z_over_y)
+        delta_125_1 = (max_ratio < 1.25).float().mean()
+
+    return rmse, mae, irmse, imae, iabsrel, absrel, silog, delta_125_1
+
 
 def eval_mask(depth_gt, args, garg_crop=False, eigen_crop=False):
         depth_gt = depth_gt.cpu().numpy()

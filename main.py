@@ -29,7 +29,7 @@ def main():
     args.workers=4*len(convert_str_to_num(args.gpus,'int'))
     
     current_time = time.strftime('%y%m%d_%H%M%S')
-    args.save_dir = '/workspace/logs/train/{}_{}_{}'.format(current_time, args.model_name, args.save)
+    args.save_dir = '/home/jay/DepthPrompting/workspace/logs/train/{}_{}_{}'.format(current_time, args.model_name, args.save)
     os.makedirs(args.save_dir, exist_ok=True)
     print('Everything related to this model will be stored here {}'.format(args.save_dir))
 
@@ -68,6 +68,18 @@ def main_worker(args):
         target_vals = convert_str_to_num(args.nyu_val_samples, 'int')
         val_datasets = [NYU_Dataset(args, 'test', num_sample_test=v) for v in target_vals]
         print('Dataset is NYU')
+
+    elif args.data_name == 'TartanAir':
+        from data.tartanair import TartanAir as TartanAir_dataset
+        args.max_depth = 25.0
+        # args.train_path_txt = './data/tartanair_training.txt'
+        # args.val_path_txt = './data/tartanair_testing.txt'
+        args.train_path_txt = './data/flsea_preserved_testing.txt'
+        args.val_path_txt = './data/flsea_preserved_testing.txt'
+        train_dataset = TartanAir_dataset(args, 'train')
+        target_vals = [400]
+        val_datasets = [TartanAir_dataset(args, 'test')]
+        print('Dataset is TartanAir')
 
     elif args.data_name == 'KITTIDC':
         from data.kittidc import KITTIDC as KITTI_dataset
