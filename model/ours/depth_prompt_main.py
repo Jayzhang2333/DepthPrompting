@@ -143,7 +143,7 @@ class depthprompting(nn.Module):
                 if num_dep < 16: 
                     continue
                 A = torch.cat((A,torch.ones(num_dep,1).to(A)),dim=1)
-                X = torch.linalg.lstsq(A, B).solution
+                X = torch.linalg.lstsq(A.cpu(), B.cpu()).solution.cuda(0)
                 X = X.to(pred_init)
                 pred_init[i]  = pred_init[i] * X[0] + X[1]
         else:

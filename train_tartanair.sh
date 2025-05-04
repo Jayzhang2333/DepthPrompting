@@ -1,0 +1,1 @@
+python main.py --data_name TartanAir --dir_data / --batch_size 2 --epoch 10 --model_name depth_prompt_main --save OURS-TARTANAIR --prop_kernel 9 --prop_time 18 --init_scailing  --loss L1L2_SILogloss_init2 --gpus 0

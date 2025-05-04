@@ -1,0 +1,1 @@
+python test_multiDataLoader.py --data_name FLSea --dir_data / --model_name depth_prompt_main --pretrain ./pretrained/OURS/Depthprompting_depthformer_nyu.tar --prop_kernel 9 --conf_prop --prop_time 18  --init_scailing --gpu 0

@@ -74,11 +74,12 @@ class TartanAir(Dataset):
 
         # camera intrinsics (half-resolution)
         self.K = torch.Tensor([
-            1296.666758476217,
-            1300.831316354508,
-            501.50386149846,
-            276.161712082695
+            320,
+            320,
+            320,
+            240
         ])
+
         
         # read split txt
         self.sample_list = []
@@ -103,7 +104,10 @@ class TartanAir(Dataset):
     def __getitem__(self, idx):
         entry = self.sample_list[idx]
         rgb = Image.open(entry['rgb']).convert('RGB')
-        dep_img = Image.open(entry['gt'])  # single-channel depth TIFF
+        # dep_img = Image.open(entry['gt'])  # single-channel depth TIFF
+
+        gt_np = np.load(entry['gt'])  # expected shape (H, W)
+        dep_img = Image.fromarray(gt_np.astype(np.float32), mode='F')
 
         # augmentation
         

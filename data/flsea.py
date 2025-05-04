@@ -52,6 +52,8 @@ def generate_feature_map_for_ga(
             sparse_depth[y, x] = d
             valid_count += 1
 
+    sparse_depth[sparse_depth>25] = 0
+
     # return both map and count of valid points
     return sparse_depth[..., np.newaxis], valid_count
 
@@ -137,5 +139,5 @@ class FLSea(Dataset):
             'dep': dep_sp,
             'gt': dep,
             'K': K,
-            'num_sample': ns
+            'num_sample': ns,
         }

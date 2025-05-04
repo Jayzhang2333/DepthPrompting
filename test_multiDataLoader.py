@@ -175,7 +175,9 @@ def test(test_loader, model, args, visual, target_sample):
 
             if target_sample==0: 
                 rmse_result, mae_result, i_rmse_result, i_mae_result, i_absrel_result, absrel_result, silog_result, d1__result = eval_metric2(sample, output['pred_init'], args)
-            else: rmse_result, mae_result, i_rmse_result, i_mae_result, i_absrel_result, absrel_result, silog_result, d1__result = eval_metric2(sample, output['pred'], args)
+            else:
+                # print("use final prediction") 
+                rmse_result, mae_result, i_rmse_result, i_mae_result, i_absrel_result, absrel_result, silog_result, d1__result = eval_metric2(sample, output['pred'], args)
             
 
             rmse.update(rmse_result, sample['gt'].size(0))

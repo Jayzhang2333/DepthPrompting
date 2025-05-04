@@ -219,32 +219,29 @@ def resize(input,
 #     return rmse, mae, delta_125_1
 
 import torch
-
+import matplotlib.pyplot as plt
 def eval_metric2(sample, output, args, rescale=None):
     """
-    Compute:
-      – RMSE
-      – MAE
-      – iRMSE
-      – iMAE
-      – iAbsRel
-      – AbsRel
-      – SILog
-      – δ<1 (percentage of pixels with max(gt/pred, pred/gt) < 1.25)
+    Compute various depth metrics, and if inverse-RMSE > 1, show GT vs Pred maps.
     """
     eps = 1e-8
     args.min_depth = 0.1
 
     with torch.no_grad():
-        pred = output.detach()
-        gt   = sample['gt'].detach()
+        # detach and keep full-resolution copies for plotting
+        pred_full = output.detach().clone()   # shape [1,1,H,W]
+        pred_full[pred_full<0.1] = 0.1
+        pred_full[pred_full>25] = 25
+        gt_full   = sample['gt'].detach().clone()
 
-        # 1) mask out invalid pixels
-        mask = eval_mask(gt, args,
-                         garg_crop=args.garg_crop,
-                         eigen_crop=args.eigen_crop)
-        pred = pred[mask]
-        gt   = gt[mask]
+        # 1) mask out invalid pixels for metric computation only
+        mask = eval_mask(
+            gt_full, args,
+            garg_crop=args.garg_crop,
+            eigen_crop=args.eigen_crop
+        )
+        pred = pred_full[mask]
+        gt   = gt_full[mask]
 
         # 2) basic differences
         diff       = pred - gt
@@ -255,7 +252,7 @@ def eval_metric2(sample, output, args, rescale=None):
         rmse = torch.sqrt(diff_sqr.mean())
         mae  = diff_abs.mean()
 
-        # 4) AbsRel (regular depth)
+        # 4) AbsRel
         absrel = (diff_abs / (gt + eps)).mean()
 
         # 5) SILog
@@ -267,19 +264,40 @@ def eval_metric2(sample, output, args, rescale=None):
         # 6) inverse‐depth metrics
         pred_inv = 1.0 / (pred + eps)
         gt_inv   = 1.0 / (gt   + eps)
-        diff_inv     = pred_inv - gt_inv
-        diff_inv_abs = diff_inv.abs()
-        diff_inv_sqr = diff_inv.pow(2)
+        diff_inv_sqr = (pred_inv - gt_inv).pow(2)
+        diff_inv_abs = (pred_inv - gt_inv).abs()
 
         irmse   = torch.sqrt(diff_inv_sqr.mean())
         imae    = diff_inv_abs.mean()
         iabsrel = (diff_inv_abs / (gt_inv + eps)).mean()
 
-        # 7) δ<1.25 (original depth)
-        y_over_z   = gt   / (pred + eps)
-        z_over_y   = pred / (gt   + eps)
-        max_ratio  = torch.max(y_over_z, z_over_y)
+        # 7) δ<1.25
+        y_over_z  = gt / (pred + eps)
+        z_over_y  = pred / (gt + eps)
+        max_ratio = torch.max(y_over_z, z_over_y)
         delta_125_1 = (max_ratio < 1.25).float().mean()
+
+        # if inverse‐RMSE is high, plot the maps
+        if irmse > 1:
+            print(irmse)
+            # squeeze to H×W and convert to NumPy
+            gt_img   = gt_full[0,0].cpu().numpy()
+            pred_img = pred_full[0,0].cpu().numpy()
+
+            # create side-by-side figure
+            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+            im0 = axes[0].imshow(gt_img,   cmap='plasma')
+            axes[0].set_title('Ground Truth')
+            axes[0].axis('off')
+
+            im1 = axes[1].imshow(pred_img, cmap='plasma')
+            axes[1].set_title('Prediction')
+            axes[1].axis('off')
+
+            # single colorbar for both
+            fig.colorbar(im1, ax=axes, fraction=0.046, pad=0.04)
+            plt.tight_layout()
+            plt.show()
 
     return rmse, mae, irmse, imae, iabsrel, absrel, silog, delta_125_1
 
